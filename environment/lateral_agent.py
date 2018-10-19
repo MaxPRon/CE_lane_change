@@ -8,13 +8,13 @@ import math
 
 class lateral_control:
 
-    def __init__(self,P,I,D,dt):
+    def __init__(self,dt):
         self.lr = 2
         self.lf = 2
 
-        self.Kp = P
-        self.Ki = I
-        self.Kd = D
+        self.Kp = 1
+        self.Ki = 1
+        self.Kd = 1
 
         self.max_angle = 15
 
@@ -78,7 +78,7 @@ class lateral_control:
         self.H = matrix(HF - H0, tc='d')
         self.f = matrix(np.zeros((6, 1)), tc='d')
         start = time.time()
-        self.sol = solvers.qp(self.H, self.f, A=self.Aeq, b=self.beq, kktsolver='ldl', options={'kktreg': 1e-9})
+        self.sol = solvers.qp(self.H, self.f, A=self.Aeq, b=self.beq, kktsolver='ldl', options={'kktreg': 1e-10})
         end = time.time()
 
         self.params = np.array(
@@ -95,10 +95,20 @@ class lateral_control:
 
 
         curvature = np.divide(ddfunc, (1 + (dfunc ** 2))**(1.5))
-        curvature = ddfunc/((1+dfunc**2)**(3/2))
+        #curvature = ddfunc/((1+dfunc**2)**(3/2))
+        #print(curvature)
 
         if s < self.sF:
             #self.delta = np.arctan(np.multiply(np.divide(self.lf, self.lr + 1), np.arcsin(np.tan(self.lr*curvature))))
+            #if abs(self.lr * curvature) > 1:
+            #    print(self.lr*curvature)
+            #    print('Stop')
+
+            if curvature > (1/self.lr):
+                curvature = min(curvature,1/self.lr)
+            elif(curvature < -1/self.lr):
+                curvature = max(curvature,-1/self.lr)
+
             self.delta = np.arctan(((self.lr/self.lr)+1)*np.tan(np.arcsin(self.lr*curvature)))
 
 

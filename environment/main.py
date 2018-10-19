@@ -8,7 +8,7 @@ import lateral_agent
 
 
 
-env = world.World(10,5,25,30,0,1)
+env = world.World(10,5,1000,30,0,1)
 P = 1
 I = 0
 D = 0.5
@@ -17,7 +17,7 @@ dt = 0.05
 
 done = False
 
-lateral_controller = lateral_agent.lateral_control(P,I,D,dt)
+lateral_controller = lateral_agent.lateral_control(dt)
 
 goal_lane = (1 - 1) * env.road_width + env.road_width * 0.5
 x_goal = 100
@@ -30,11 +30,13 @@ velocity = []
 update = True
 angle =[]
 x_acc = []
+y_acc_2 = []
 for t in range(0,2000): #100s
     x_ego, y_ego, x_dot, y_dot ,v= env.get_ego()
 
     if goal_lane == y_ego:
         acc = env.dist_control(0)
+        y_acc_2.append(0)
         steer = goal_lane
         y_acc.append(0)
         s_angle = 0
@@ -46,9 +48,9 @@ for t in range(0,2000): #100s
         acc = env.dist_control(0)
         y_acc.append(lateral_controller.y_acceleration(x_ego, v))
         s_angle = lateral_controller.steering(x_ego)
+        y_acc_2.append(ydotdot)
 
-
-    if t == 0:
+    if t == 100:
         goal_lane = (2 - 1) * env.road_width + env.road_width * 0.5
         _,_ = lateral_controller.solve(y_ego,goal_lane,x_ego,x_ego+50)
         update = False
@@ -60,7 +62,7 @@ for t in range(0,2000): #100s
 
     if t == 800:
         goal_lane = (4 - 1) * env.road_width + env.road_width * 0.5
-        _,_ = lateral_controller.solve(y_ego,goal_lane,x_ego,x_ego+25)
+        _,_ = lateral_controller.solve(y_ego,goal_lane,x_ego,x_ego+50)
         update = False
 
     if t == 1200:
@@ -68,14 +70,14 @@ for t in range(0,2000): #100s
         _,_ = lateral_controller.solve(y_ego,goal_lane,x_ego,x_ego+50)
         update = False
     if t == 1600:
-        goal_lane = (3 - 1) * env.road_width + env.road_width * 0.5
-        _,_ = lateral_controller.solve(y_ego,goal_lane,x_ego,x_ego+150)
+        goal_lane = (2 - 1) * env.road_width + env.road_width * 0.5
+        _,_ = lateral_controller.solve(y_ego,goal_lane,x_ego,x_ego+100)
         update = False
     #acc = 0
     action = [acc,steer]
     env.step(action)
 
-    print("Velocity:", v, "X-Velocity:",x_dot,"Y-Velocity:",y_dot)
+    #print("Velocity:", v, "X-Velocity:",x_dot,"Y-Velocity:",y_dot)
     angle.append(s_angle)
     POS_Y.append(y_ego)
     POS_X.append(x_ego)
@@ -121,5 +123,20 @@ plt.plot(POS_X,np.rad2deg(angle))
 plt.xlabel('x-pos in [m]')
 plt.ylabel('steering angle in [degree]')
 plt.title('Steering angle for path')
+plt.show(block=False)
+
+
+plt.figure(4)
+ax1 = plt.subplot(2,1,1)
+ax1.plot(POS_X,y_acc)
+ax1.set_xlabel('x_pos in [m]')
+ax1.set_ylabel('acc in [m/s^2]')
+ax1.set_title('y-acceleration')
+ax2 = plt.subplot(2,1,2)
+ax2.plot(POS_X,y_acc_2)
+ax2.set_xlabel('x_pos in [m]')
+ax2.set_ylabel('acc in [m/s^2]')
+ax2.set_title('y-acceleration from function')
+plt.tight_layout()
 plt.show()
 

@@ -19,10 +19,10 @@ def vectorize_state(state):
     v_y = []
     v_v = []
 
-    for id in range(len(state)):
-        v_x.append(state[id].x)
-        v_y.append(state[id].y)
-        v_v.append(state[id].v)
+    for id_n in range(len(state)):
+        v_x.append(state[id_n].x)
+        v_y.append(state[id_n].y)
+        v_v.append(state[id_n].v)
 
 
     state_v = np.concatenate((v_x,v_y))
@@ -54,27 +54,27 @@ ego_speed_init = speed_limit
 #### Network parameters ####
 
 input_dim = (num_of_cars+1)*3
-output_dim = x_range*num_of_lanes
+output_dim = (x_range*num_of_lanes)-1
 hidden_units = 100
 layers = 5
-clip_value = 300
+clip_value = 7500
 learning_rate = 0.001
-buffer_size = 50000
-batch_size = 32
-update_freq = 10000
+buffer_size = 100000
+batch_size = 64
+update_freq = 20000
 
 #### RL Parameters ####
 
 gamma = 0.99
 eStart = 1
-eEnd = 0.2
-estep = 100000
+eEnd = 0.1
+estep = 1500000
 
 #### Learning Parameters ####
 
-max_train_episodes = 200
-pre_train_steps = 10000
-random_sweep = 10
+max_train_episodes = 20000
+pre_train_steps = 50000
+random_sweep = 3
 tau = 1
 
 
@@ -91,8 +91,9 @@ goal_lane_prev = goal_lane
 action = np.zeros(2) # acc/steer
 
 #### Plot variables ####
-max_timestep = 1250
+max_timestep = 1500
 average_window = 100
+finished = 0
 x_ego_list = np.zeros((random_sweep,max_timestep))
 y_ego_list = np.zeros((random_sweep,max_timestep))
 y_acc_list = np.zeros((random_sweep,max_timestep))
@@ -101,9 +102,11 @@ x_acc_list = np.zeros((random_sweep,max_timestep))
 reward_list = np.zeros((random_sweep,max_timestep))
 reward_sum_list = np.zeros((random_sweep,max_train_episodes))
 reward_average = np.zeros((random_sweep,int(max_train_episodes/average_window)))
+finished_average = np.zeros((random_sweep,int(max_train_episodes/average_window)))
 
 
 
+id_num = "test"
 
 
 
@@ -118,13 +121,13 @@ for r_seed in range(0,random_sweep):
     actions = []
     reward_time = []
 
-    folder_path = './initial_testing/'
+    folder_path = './long/'
 
-    path_save = folder_path+ "model_initial/"
+    path_save = folder_path+ "model_long_random_2/"
 
     if r_seed == 1:  # Only write for first time
 
-        file = open(path_save + 'params' + str(id) + '.txt', 'w')
+        file = open(path_save + 'params_' + str(id_num) + '.txt', 'w')
         # file = open(complete_file, 'w')
         file.write('NETWORK PARAMETERS: \n\n')
         file.write('Layers: ' + str(layers) + '\n')
@@ -140,7 +143,7 @@ for r_seed in range(0,random_sweep):
         file.write('Gamma: ' + str(gamma) + '\n')
         file.write('Epsilon start: ' + str(eStart) + '\n')
         file.write('Epsilon end: ' + str(eEnd) + '\n')
-        file.write('Epsilon steps: ' + str(estep) + '\n')
+        file.write('Epsilon steps: ' + str(estep) + '\n\n')
 
         file.write('SCENARIO PARAMETERS: \n\n')
         file.write('Cars: ' + str(num_of_cars) + '\n')
@@ -148,6 +151,7 @@ for r_seed in range(0,random_sweep):
         file.write('Ego speed init: ' + str(ego_speed_init) + '\n')
         file.write('Ego pos init: ' + str(ego_pos_init) + '\n')
         file.write('Ego lane init: ' + str(ego_lane_init) + '\n')
+        file.write('Non-Ego tracklength: ' + str(track_length) + "\n")
 
         file.close()
 
@@ -160,7 +164,7 @@ for r_seed in range(0,random_sweep):
 
     init = tf.global_variables_initializer()
 
-    saver = tf.train.Saver()
+    saver = tf.train.Saver(max_to_keep=None)
 
     trainables = tf.trainable_variables()
 
@@ -180,7 +184,7 @@ for r_seed in range(0,random_sweep):
 
     with tf.Session() as sess:
         sess.run(init)
-
+        start = time.time()
         for episode in range(max_train_episodes):
             episode_buffer = q_learning.replay_buffer(buffer_size)
             env = world.World(num_of_cars, num_of_lanes, track_length, speed_limit, ego_pos_init, ego_lane_init,
@@ -242,15 +246,21 @@ for r_seed in range(0,random_sweep):
                 #timestep += 1
             exp_buffer.add(episode_buffer.buffer)
             reward_sum_list[r_seed, episode] = reward_sum
+            end = time.time()
+            #print("Time for one episode: ",end-start," Episode: ",episode)
+            if env.success == True:
+                finished += 1
 
-            if episode % 5000 == 0:
+            if episode % 400 == 0:
                 save_path = saver.save(sess,path_save+"modelRL_"+str(r_seed)+"_"+str(episode)+".ckpt")
-                print("Model saved in: %s",save_path)
+                print("Model saved in: ",save_path)
             if episode % average_window == 0:
                 if episode > 1:
-                    print("Total steps: ", total_steps, "Average reward over 100 Episodes: ",
-                          np.mean(reward_sum_list[r_seed,episode-average_window:episode]))
+                    print("Total steps: ", total_steps," Episode: ",episode, " Average reward over 100 Episodes: ",
+                          np.mean(reward_sum_list[r_seed,episode-average_window:episode]),"Finished: ",finished,"/100"," Episode:", episode)
                     reward_average[r_seed, int(episode / average_window)] = np.mean(reward_sum_list[r_seed,episode-average_window:episode])
+                    finished_average[r_seed, int(episode / average_window)] = finished
+                    finished = 0
 
         final_save_path = saver.save(sess,path_save+"random_"+str(r_seed)+"_"  + "Final.ckpt")
         print("Model saved in: %s",final_save_path)
@@ -260,7 +270,7 @@ plt.figure(4)
 
 ax = plt.subplot(1,1,1)
 ax.set_title("Reward over time")
-ax.set_xlabel("epsiode/100")
+ax.set_xlabel("epsisode/100")
 ax.set_ylabel("reward")
 ax.grid()
 sns.tsplot(reward_average)
@@ -270,5 +280,20 @@ plt.tight_layout()
 plt.savefig(path_save + 'reward' + '.png')
 plt.close()
 
+
+plt.figure(5)
+ax = plt.subplot(1, 1, 1)
+ax.set_title("Success time")
+ax.set_xlabel("epsiode/100")
+ax.set_ylabel("Finished Episodes/100")
+ax.grid()
+sns.tsplot(finished_average)
+manager = plt.get_current_fig_manager()
+manager.resize(*manager.window.maxsize())
+# plt.show(block=False)
+plt.tight_layout()
+plt.savefig(path_save + 'finished' + '.png')
+# plt.show()
+plt.close()
 
 
